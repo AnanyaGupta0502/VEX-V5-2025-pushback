@@ -21,10 +21,12 @@
 #define _PROS_MOTORS_HPP_
 
 #include <cstdint>
+#include <iostream>
 
 #include "pros/abstract_motor.hpp"
 #include "pros/device.hpp"
 #include "pros/motors.h"
+#include "rtos.hpp"
 
 namespace pros {
 inline namespace v5 {
