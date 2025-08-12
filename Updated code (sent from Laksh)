@@ -1,0 +1,233 @@
+// This is for the judges during a interview: Hello Judges, So this is our code section, so basically
+// this will take you through a step by step of our driver code, it will explain what certain function do
+// and why we decided too use those functions in our robot, plus some areas will explain what it does to
+// help our robot. 
+#include "main.h"
+#include "lemlib/api.hpp"
+#include "pros/abstract_motor.hpp"
+#include "pros/adi.hpp"
+#include "pros/misc.h"
+#include "pros/motor_group.hpp"
+#include "pros/rtos.hpp"
+#include <stdlib.h>
+ 
+//Defining Boolean For pneumatics, pneumatics are pistons, and they are used for rapid changes in game play 
+// or other immediate changes, in our case we decided to use the pistons, in a sort of angle change of the
+// ball so that we are able to score in the middle goal as well as the high goals.
+bool PneumaticPiston1 = false;
+bool PneumaticPiston2 = false;
+bool PneumaticPiston3 = false;
+bool PneumaticPiston4 = false;
+bool PneumaticPiston5 = false;
+bool PneumaticPiston6 = false;
+bool PneumaticPiston7 = false;
+
+// Creating Controller, this function defines the vex controller which we will be using in game and during
+// skills. This line of code is very important, without it the entire code won't be able to work. 
+pros::Controller controller(pros::E_CONTROLLER_MASTER);
+
+//Setting up Drive Train Motors, the drive train is the drive base in which our gears, screwjoints, wheels
+//, motors, odom pods, etc., would be. So basically line 25 antd line 26, are defining the motors of our dr-
+// ive train. The left motors are connected to port 1, 2, and 3, and are using blue motor cartridges, ensuring
+//  that our drive can go faster. The right motors are connected to ports 4, 5, and 6 also using blue motor
+// cartridges. If we used different cartridges for different sides of our drive train, the friction will
+// ensure that our robot goes faster on one side and slower on the other makin it so that our robot is in a
+// loop of turning.
+
+pros::MotorGroup right_motors({-20, -14, 21}, pros::MotorGearset::blue);
+pros::MotorGroup left_motors({11, -13, 1}, pros::MotorGearset::blue);
+
+//Mechanism Motors, these are the motors in our two stage intake, we decided to use a two stage intake so 
+// we can spit out unwanted balls out of the robot so that we lose minimal points. The less points the
+// opposing alliance scores the higher chance we have at winning our match. This two stage intake mech,
+// would also help during autonomous because it would be able spit out opposing alliance balls from the
+// matchload section, during our Autonomous Win Point code.
+pros::Motor intakestage1(7, pros::MotorGearset::blue);
+pros::Motor intakestage2(8, pros::MotorGearset::blue);
+
+//Pneumatics System, this iS our pneumatics system we are planning on using two pistons for being able to 
+// rapidly change the route of the ball and change which goal it  qould be going to very quickly. The
+// reason we are usin two pistons is too push up our entire first and second stage of our intake mech. The
+// weight of our second stage intake should be pretty heavy because we are planning to use high strength
+// axles in our intake to ensure that during matches our robot axles wouldn't bend or smash.
+
+pros::adi::DigitalOut level2_level3('A');
+pros::adi::DigitalOut random2('B');
+
+// DriveTrain 
+//Track Width is the distance between                                 the center of the left wheel and center of the right wheel
+//Wheel Diameter is the length of our wheels
+//RPM is like the RPM of the robot
+//Horizontal Drift will learn later
+lemlib::Drivetrain drivetrain(&left_motors, // left motor group
+    &right_motors, // right motor group
+    14.5, // track width (inches)
+    lemlib::Omniwheel::NEW_325, // using new 3.25" omnis
+    343, // drivetrain rpm is 343
+    2 // horizontal drift is 2 (for now)
+);
+//ODOMETRY CODE 
+pros::Imu imu(10);
+
+lemlib::OdomSensors sensors(nullptr, // vertical tracking wheel 1, set to nullptr
+                            nullptr, // vertical tracking wheel 2, set to nullptr as we are using IMEs
+                            nullptr, // horizontal tracking wheel 1
+                            nullptr, // horizontal tracking wheel 2, set to nullptr as we don't have a second one
+                            &imu // inertial sensor
+);
+
+// lateral PID controller
+lemlib::ControllerSettings lateral_controller(10, // proportional gain (kP)
+                                              0, // integral gain (kI)
+                                              3, // derivative gain (kD)
+                                              0, // anti windup
+                                              0, // small error range, in inches
+                                              0, // small error range timeout, in milliseconds
+                                              0, // large error range, in inches
+                                              0, // large error range timeout, in milliseconds
+                                              0 // maximum acceleration (slew)
+);
+
+// angular PID controller
+lemlib::ControllerSettings angular_controller(2, // proportional gain (kP)
+                                              0, // integral gain (kI)
+                                              10, // derivative gain (kD)
+                                              0, // anti windup
+                                              0, // small error range, in degrees
+                                              0, // small error range timeout, in milliseconds
+                                              0, // large error range, in degrees
+                                              0, // large error range timeout, in milliseconds
+                                              0 // maximum acceleration (slew)
+);
+
+// final chassis
+lemlib::Chassis chassis(drivetrain, // drivetrain settings
+                        lateral_controller, // lateral PID settings
+                        angular_controller, // angular PID settings
+                        sensors // odometry sensors
+);
+/**
+ * Runs initialization code. This occurs as soon as the program is started.
+ *
+ * All other competition modes are blocked by initialize; it is recommended
+ * to keep execution time for this mode under a few seconds.
+ */
+void initialize() {
+    pros::lcd::initialize();
+    pros::lcd::set_text(1, "Hello PROS User!");
+}
+
+/**
+ * Runs while the robot is in the disabled state of Field Management System or
+ * the VEX Competition Switch, following either autonomous or opcontrol. When
+ * the robot is enabled, this task will exit.
+ */
+void disabled() {}
+
+/**
+ * Runs after initialize(), and before autonomous when connected to the Field
+ * Management System or the VEX Competition Switch. This is intended for
+ * competition-specific initialization routines, such as an autonomous selector
+ * on the LCD.
+ * 
+ * This task will exit when the robot is enabled and autonomous or opcontrol
+ * starts.
+ */
+void competition_initialize() {}
+
+/**
+ * Runs the user autonomous code. This function will be started in its own task
+ * with the default priority and stack size whenever the robot is enabled via
+ * the Field Management System or the VEX Competition Switch in the autonomous
+ * mode. Alternatively, this function may be called in initialize or opcontrol
+ * for non-competition testing purposes.
+ *
+ * If the robot is disabled or communications is lost, the autonomous task
+ * will be stopped. Re-enabling the robot will restart the task, not re-start it
+ * from where it left off.
+ */
+
+void autonomous() {
+    chassis.setPose(-140, 59,270);
+    chassis.moveToPoint(-61, 60, 1500);
+    level2_level3.set_value(true);
+    random2.set_value(true);
+    intakestage1.move_velocity(600);
+    intakestage2.move_velocity(600);
+    chassis.turnToHeading(0, 1500, {.maxSpeed = 80}, false);
+
+}
+
+/**
+ * Runs the operator control code. This function will be started in its own task
+ * with the default priority and stack size whenever the robot is enabled via
+ * the Field Management System or the VEX Competition Switch in the operator
+ * control mode.
+ *
+ * If no competition control is connected, this function will run immediately
+ * following initialize().
+ *
+ * If the robot is disabled or communications is lost, the
+ * operator control task will be stopped. Re-enabling the robot will restart the
+ * task, not resume it from where it left off.
+ */
+
+ void colorsensor(){
+    
+ }
+ // Intake Outtake and Intake
+void outtake_inttake() {
+    while (true) {
+        if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)) { //Outtakes thy intake
+            intakestage1.move_velocity(600);
+            intakestage2.move_velocity(600);
+        }else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)) { //Intake thy intake
+            intakestage1.move_velocity(-600);
+            intakestage2.move_velocity(-600);
+        } else {
+            intakestage2.move_velocity(0); // If these buttons aren't being pressed then it like stops
+            intakestage1.move_velocity(0);
+        }
+        pros::delay(20);
+    }
+}
+ //Intake Function
+void level2_level3_scoring() {
+    while (true) {
+        if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) { //Outtakes thy intake
+            intakestage1.move_velocity(600);
+            intakestage2.move_velocity(600);
+        }else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) { //Intake thy intake
+            intakestage1.move_velocity(600);
+            intakestage2.move_velocity(600);
+        } else {
+            intakestage1.move_velocity(0); // If these buttons aren't being pressed then it like stops
+            intakestage2.move_velocity(0);
+        }
+        pros::delay(20);
+    }           
+}
+
+// Pneumatics Function
+void pneumatics() {
+    while (true) {
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) { 
+            PneumaticPiston1 = !PneumaticPiston1; //Togles one of the pistons and puts a piece of poly carb down to change the angle of the game object
+            level2_level3.set_value(PneumaticPiston1);//Sets Piston correct value
+            PneumaticPiston2 = !PneumaticPiston2; //toggles another one of the piston that is at
+            random2.set_value(PneumaticPiston2); //Sets Piston correct value 
+        } 
+        pros::delay(20);
+    }
+}
+
+void opcontrol() {
+    pros::Task Intake_Task(outtake_inttake); // Calls Intake Function
+    pros::Task Pneumatics_Task(pneumatics); // Calls Pneumatics Function
+    while (true) {
+        const int lateral = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y); // Moving Forward & Backward
+        const int linear = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X); // Turning
+        chassis.arcade(lateral, linear); // Tells robot to move
+        pros::delay(20); // Prevents freezing (very important to code)
+    }
+}
