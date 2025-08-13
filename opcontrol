@@ -1,0 +1,40 @@
+void opcontrol() {
+    // loop forever
+    while (true) {
+        // get left y and right x positions
+        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
+        // Debug: Print controller values to console
+        printf("Controller - LeftY: %d, RightX: %d\n", leftY, rightX);
+
+        // move the robot
+        // prioritize steering slightly
+        chassis.arcade(leftY, rightX, false, 0.75);
+
+        // delay to save resources
+        pros::delay(25);
+        
+        if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)){
+            intake_bottom.move_velocity(600);
+            intake_top.brake();
+        }
+
+        else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)){
+            intake_bottom.move_voltage(-12000);
+            intake_top.move_voltage(-12000);
+        }
+        else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)){
+            intake_bottom.move_velocity(600);
+            intake_top.move_velocity(600);
+        }
+
+        else{
+            intake_bottom.move_voltage(0);
+            intake_top.move_voltage(0);
+        }
+    }
+    lemlib::Pose currentPose = chassis.getPose(); // Get the current pose of the chassis
+        pros::lcd::print(0, "X: %f", currentPose.x);
+        pros::lcd::print(1, "Y: %f", currentPose.y);
+}
