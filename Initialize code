@@ -1,0 +1,26 @@
+void initialize() {
+    pros::lcd::initialize();
+    pros::lcd::set_text(1, "Displaying Coordinates...");
+    chassis.calibrate() ; // Calibrate the chassis
+   
+
+    // Register the center button callbacks
+    pros::lcd::register_btn1_cb(on_center_button);
+    
+
+// Removed duplicate definition of initialize
+
+    // Create a task to continuously display the coordinates
+    pros::Task displayCoordinates([]() {
+        while (true) {
+            // Print robot location to the brain screen
+            //printf(0, "X: %f", chassis.getPose().x); // x-coordinate
+            pros::lcd::print(0, "X: %f", chassis.getPose().x);
+            pros::lcd::print(1, "Y: %f", chassis.getPose().y); // y-coordinate
+            pros::lcd::print(2, "Theta: %f", chassis.getPose().theta); // heading (theta)
+
+            // Delay to save resources
+            pros::delay(100); // Update every 100ms
+        }
+    });
+}
