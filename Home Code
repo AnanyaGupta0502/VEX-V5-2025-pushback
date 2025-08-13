@@ -12,8 +12,10 @@ pros::Controller controller(pros::E_CONTROLLER_MASTER);
 //L1 is for spinning all motors to the left (some motors are reversed), L2 is for bottom motors left, and top 2 ones are right, R1 is for all spinning right
 
 // motor groups
-pros::MotorGroup right_motors({-11}, pros::MotorGearset::green); // left motors on ports
-pros::MotorGroup left_motors({20}, pros::MotorGearset::green); // right motors on ports (removed negative signs)
+pros::MotorGroup right_motors({-15, 16, 20}, pros::MotorGearset::blue ); // left motors on ports
+pros::MotorGroup left_motors({13, -11, -12}, pros::MotorGearset::blue ); // right motors on ports (removed negative signs)
+pros::Motor intake_top(10, pros::MotorGearset::blue);
+pros::Motor intake_bottom(14, pros::MotorGearset::blue);
 //pros::MotorGroup intake_motors_top({3}, pros::MotorGearset::green); // intake top motor on port 3 forward is left
 //pros::MotorGroup intake_motors_middle({2}, pros::MotorGearset::green); // intake top motor on port 2 forward is left
 //pros::MotorGroup intake_motors_bottom({12}, pros::MotorGearset::green); // intake top motor on port 7 red gears are going forward is right and green gears are going forward is left
@@ -22,14 +24,14 @@ lemlib::Drivetrain drivetrain(&left_motors, // left motor group
 	&right_motors, // right motor group
     11.375, // 11.375 inch track width
     lemlib::Omniwheel::NEW_4, // using new 4" omnis
-	450, // drivetrain rpm is 450 <- use this to change the speed of the robot
+	343, // drivetrain rpm is 450 <- use this to change the speed of the robot
 	2 // horizontal drift is 2 (for now)
 );
 
 // Inertial Sensor on port 10
-pros::Imu imu(10);
+pros::Imu imu(9);
 //Rotation sensor on port 1
-pros::Rotation rotationSensor(1); 
+//pros::Rotation rotationSensor(1); 
 
 
 
@@ -113,51 +115,50 @@ void on_center_button() {
 }
 //L1 is for spinning all motors to the left (some motors are reversed), L2 is for bottom motors left, and top 2 ones are right, R1 is for all spinning right
 //Intake Control and Drive Control 
-void opcontrol() {
-    while (true) {
-        // Drive control
-        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-        int rightX =  controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
-        chassis.arcade(leftY, -rightX);
 
-        // Combined intake control for all motor groups
-       // if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)) {
-         //   intake_motors_top.move(100);    // Spin top intake forward (left)
-           // intake_motors_middle.move(100); // Spin middle intake forward (left)
-            //intake_motors_bottom.move(100); // Spin bottom intake forward (left)
-      //  } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)) {
-        //    intake_motors_top.move(-100);    // Spin top intake backward (right)
-          //  intake_motors_middle.move(-100); // Spin middle intake backward (right)
-            //intake_motors_bottom.move(100); // Spin bottom intake forward (left)
-		//} else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
-		//		intake_motors_top.move(-100);    // Spin top intake backward (right)
-		//		intake_motors_middle.move(-100); // Spin middle intake backward (right)
-		//		intake_motors_bottom.move(-100); // Spin bottom intake forward (right)
-				
-     //   } else {
-       //     intake_motors_top.move(0);    // Stop top intake
-         //   intake_motors_middle.move(0); // Stop middle intake
-           // intake_motors_bottom.move(0); // Stop bottom intake
-        
-        //double imuRotation = imu.get_rotation(); 
-        lemlib::Pose currentPose = chassis.getPose(); // Get the current pose of the chassis
-        pros::lcd::print(0, "X: %f", currentPose.x);
-        pros::lcd::print(1, "Y: %f", currentPose.y);
-        
-        
-
-        //pros::lcd::print(0, "IMU Rotation: %f", imuRotation); // Print IMU rotation to the LCD
-        // Delay to save resources
-        pros::delay(25);
-        }
-        //pros::lcd::print(0, "X: %f", chassis.getPose().x);
-        //pros::lcd::print(1, "Y: %f", chassis.getPose().y); // y-coordinate
-        // pros::lcd::print(2, "Theta: %f", chassis.getPose().theta); // heading (theta)
-       
-        
-    }
 //}
 
+
+void opcontrol() {
+    // loop forever
+    while (true) {
+        // get left y and right x positions
+        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
+        // Debug: Print controller values to console
+        printf("Controller - LeftY: %d, RightX: %d\n", leftY, rightX);
+
+        // move the robot
+        // prioritize steering slightly
+        chassis.arcade(leftY, rightX, false, 0.75);
+
+        // delay to save resources
+        pros::delay(25);
+        
+        if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)){
+            intake_bottom.move_velocity(600);
+            intake_top.brake();
+        }
+
+        else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)){
+            intake_bottom.move_voltage(-12000);
+            intake_top.move_voltage(-12000);
+        }
+        else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)){
+            intake_bottom.move_velocity(600);
+            intake_top.move_velocity(600);
+        }
+
+        else{
+            intake_bottom.move_voltage(0);
+            intake_top.move_voltage(0);
+        }
+    }
+    lemlib::Pose currentPose = chassis.getPose(); // Get the current pose of the chassis
+        pros::lcd::print(0, "X: %f", currentPose.x);
+        pros::lcd::print(1, "Y: %f", currentPose.y);
+}
 
 
 /**
@@ -170,8 +171,9 @@ void initialize() {
     pros::lcd::initialize();
     pros::lcd::set_text(1, "Displaying Coordinates...");
     chassis.calibrate() ; // Calibrate the chassis
+   
 
-    // Register the center button callback
+    // Register the center button callbacks
     pros::lcd::register_btn1_cb(on_center_button);
     
 
@@ -273,25 +275,6 @@ pros::Task screenTask([]() {
 });
 
 void autonomous() {
-    chassis.setPose(lemlib::Pose(-137.371, 26.661, 90)); // Reset the chassis pose
-    chassis.moveToPose(-156.345,-119.083,270, 5000);
-    chassis.setPose(lemlib::Pose(-156.345, -119.083, 270)); 
-    chassis.setPose(lemlib::Pose(-156.345, -119.083, 270)); 
-    chassis.moveToPose(63.312, -120.919, 90, 5000);   
-    chassis.setPose(lemlib::Pose(63.312, -120.919, 90));
-    chassis.moveToPose(-57.803, -67.058, 0, 5000);
-    chassis.setPose(lemlib::Pose(-57.803, -67.058, 0));
-    chassis.moveToPose(-21.691,23.601, 45, 5000); 
-    chassis.setPose(-21.691, 23.601, 45); 
-    chassis.moveToPose(-52.295,49.846,330, 5000);
-    chassis.setPose(-52.295, 49.846, 330);
-    chassis.moveToPose(-24.752,24.752,135, 5000);
-    chassis.setPose(-24.752, 24.752, 135);
-    chassis.moveToPose(160.63,112.277, 270, 5000);
-    chassis.setPose(160.63, 112.277, 270);
-    chassis.moveToPose(-66.372,119.621, 90, 5000);
+   // chassis.moveToPose();
+    intake_bottom.move_velocity(600);   
 }
-
-
-
-
