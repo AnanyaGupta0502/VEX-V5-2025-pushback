@@ -1,25 +1,40 @@
 #include "main.h"
 #include "lemlib/api.hpp" // IWYU pragma: keep
+#include "lemlib/chassis/chassis.hpp"
+#include "lemlib/pose.hpp"
+#include "liblvgl/llemu.hpp"
+#include "pros/llemu.hpp"
+#include "pros/misc.h"
+#include "pros/misc.hpp"
+
+//MOVEMENTS
+// chassis.MoveToPose() Moves the robot to a specific position (x, y) on the field and ends at a specific heading (orientation).The robot will follow a smooth, curved path if the heading is different from the current heading.
+// chassis.turnToHeading() Turns the robot in place to a specific heading (angle in degrees), without changing its position.
+// chassis.moveToPoint() Moves the robot to a specific point (x, y) on the field without changing its heading. The robot will follow a straight line path.
+// chassis.turnToPoint() Turns the robot to face a specific point (x, y) on the field without changing its position.
+// chassis.follow() Follows a predefined path with a specified lookahead distance and timeout. The robot will follow the path smoothly, adjusting its heading as needed.
 
 // controller
 pros::Controller controller(pros::E_CONTROLLER_MASTER);
+//L1 is for spinning all motors to the left (some motors are reversed), L2 is for bottom motors left, and top 2 ones are right, R1 is for all spinning right
 
 // motor groups
-pros::MotorGroup left_motors({-12,-13,-3},pros::MotorGearset::green); // left motors on ports 
-pros::MotorGroup right_motors({18,19 ,20}, pros::MotorGearset::blue); // right motors on ports 
-// pros::MotorGroup arm_motors({*insert the motot*}, pros::MotorGearset:: *color*) // Arm motor on ports
-
+pros::MotorGroup right_motors({-15, 16, 20}, pros::MotorGearset::blue ); // left motors on ports
+pros::MotorGroup left_motors({13, -11, -12}, pros::MotorGearset::blue ); // right motors on ports (removed negative signs)
+pros::Motor intake_top(10, pros::MotorGearset::blue);
+pros::Motor intake_bottom(14, pros::MotorGearset::blue);
 // drivetrain settings
 lemlib::Drivetrain drivetrain(&left_motors, // left motor group
 	&right_motors, // right motor group
-	12.5, // 10 inch track width
-	lemlib::Omniwheel::NEW_4, // using new 4" omnis
-	480, // drivetrain rpm is 480
+    11.375, // 11.375 inch track width
+    lemlib::Omniwheel::NEW_4, // using new 4" omnis
+	343, // drivetrain rpm is 450 <- use this to change the speed of the robot
 	2 // horizontal drift is 2 (for now)
 );
 
 // Inertial Sensor on port 10
-pros::Imu imu(10);
+pros::Imu imu(9);
+
 
 // lateral motion controller
 lemlib::ControllerSettings linearController(10, // proportional gain (kP)
@@ -34,9 +49,9 @@ lemlib::ControllerSettings linearController(10, // proportional gain (kP)
 );
 
 // angular motion controller
-lemlib::ControllerSettings angularController(2, // proportional gain (kP)
+lemlib::ControllerSettings angularController(2, // proportional gain (kP) can be moved to 3 or 4 (3.5)
                                              0, // integral gain (kI)
-                                             10, // derivative gain (kD)
+                                             10, // derivative gain (kD) can be moved to 6 or 8 (7)
                                              3, // anti windup
                                              1, // small error range, in degrees
                                              100, // small error range timeout, in milliseconds
@@ -49,7 +64,7 @@ lemlib::ControllerSettings angularController(2, // proportional gain (kP)
 // horizontal tracking wheel encoder. Rotation sensor, port 20, not reversed
 pros::Rotation horizontalEnc(20);
 // vertical tracking wheel encoder. Rotation sensor, port 11, reversed
-pros::Rotation verticalEnc(-11);
+pros::Rotation verticalEnc(1);
 // horizontal tracking wheel. 2.75" diameter, 5.75" offset, back of the robot (negative)
 lemlib::TrackingWheel horizontal(&horizontalEnc, lemlib::Omniwheel::NEW_275, -5.75);
 // vertical tracking wheel. 2.75" diameter, 2.5" offset, left of the robot (negative)
@@ -76,6 +91,9 @@ lemlib::ExpoDriveCurve steerCurve(3, // joystick deadband out of 127
 );
 
 // create the chassis
+/**Chassis(Drivetrain drivetrain, ControllerSettings linearSettings, ControllerSettings angularSettings,
+                OdomSensors sensors, DriveCurve* throttleCurve = &defaultDriveCurve,
+                DriveCurve* steerCurve = &defaultDriveCurve); */
 lemlib::Chassis chassis(drivetrain, linearController, angularController, sensors, &throttleCurve, &steerCurve);
 
 /**
@@ -84,15 +102,56 @@ lemlib::Chassis chassis(drivetrain, linearController, angularController, sensors
  * When this callback is fired, it will toggle line 2 of the LCD text between
  * "I was pressed!" and nothing.
  */
- 
 void on_center_button() {
 	static bool pressed = false;
 	pressed = !pressed;
 	if (pressed) {
-		pros::lcd::set_text(2, "I was pressed!");
+        pros::lcd::set_text(2, "I was pressed!");
 	} else {
-		pros::lcd::clear_line(2);
+        pros::lcd::clear_line(2);
 	}
+}
+
+//code for controller and intake control 
+void opcontrol() {
+    // loop forever
+    while (true) {
+        // get left y and right x positions
+        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
+        // Debug: Print controller values to console
+        printf("Controller - LeftY: %d, RightX: %d\n", leftY, rightX);
+
+        // move the robot
+        // prioritize steering slightly
+        chassis.arcade(leftY, rightX, false, 0.75);
+
+        // delay to save resources
+        pros::delay(25);
+        
+        if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)){
+            intake_bottom.move_velocity(600);
+            intake_top.brake();
+        }
+
+        else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)){
+            intake_bottom.move_voltage(-12000);
+            intake_top.move_voltage(-12000);
+        }
+        else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)){
+            intake_bottom.move_velocity(600);
+            intake_top.move_velocity(600);
+        }
+
+        else{
+            intake_bottom.move_voltage(0);
+            intake_top.move_voltage(0);
+        }
+    }
+    lemlib::Pose currentPose = chassis.getPose(); // Get the current pose of the chassis
+        pros::lcd::print(0, "X: %f", currentPose.x);
+        pros::lcd::print(1, "Y: %f", currentPose.y);
 }
 
 
@@ -102,11 +161,32 @@ void on_center_button() {
  * All other competition modes are blocked by initialize; it is recommended
  * to keep execution time for this mode under a few seconds.
  */
+ //initialize function: chassis will be calibrated, and the center button will be registered to a callback function
 void initialize() {
-	pros::lcd::initialize();
-	pros::lcd::set_text(1, "Hello PROS User!");
+    pros::lcd::initialize();
+    pros::lcd::set_text(1, "Displaying Coordinates...");
+    chassis.calibrate() ; // Calibrate the chassis
+   
 
-	pros::lcd::register_btn1_cb(on_center_button);
+    // Register the center button callbacks
+    pros::lcd::register_btn1_cb(on_center_button);
+    
+
+// Removed duplicate definition of initialize
+
+    // Create a task to continuously display the coordinates
+    pros::Task displayCoordinates([]() {
+        while (true) {
+            // Print robot location to the brain screen
+            //printf(0, "X: %f", chassis.getPose().x); // x-coordinate
+            pros::lcd::print(0, "X: %f", chassis.getPose().x);
+            pros::lcd::print(1, "Y: %f", chassis.getPose().y); // y-coordinate
+            pros::lcd::print(2, "Theta: %f", chassis.getPose().theta); // heading (theta)
+
+            // Delay to save resources
+            pros::delay(100); // Update every 100ms
+        }
+    });
 }
 
 /**
@@ -138,7 +218,7 @@ void competition_initialize() {}
  * will be stopped. Re-enabling the robot will restart the task, not re-start it
  * from where it left off.
  */
-void autonomous() {}
+// Removed duplicate definition of autonomous
 
 /**
  * Runs the operator control code. This function will be started in its own task
@@ -173,57 +253,23 @@ void opcontrol() {
 		pros::delay(20);                               // Run for 20 ms then update
 	}
 }*/
-
-
-
-void opcontrol() {
-    // loop forever
+// thread to for the screen and posiiion logging 
+pros::Task screenTask([]() {
     while (true) {
-        // get left y and right x positions
-        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+        //print robot location to the brain screen 
+        pros::lcd::print(0, "X: %f", chassis.getPose().x); //x
+        pros::lcd::print(1, "Y: %f", chassis.getPose().y); //y
+        pros::lcd::print(2, "Theta: %f", chassis.getPose().theta); //heading
+        //log positiion telemetry t
+        lemlib::telemetrySink() -> info("Chassis pose: {}", chassis.getPose());
+        //delay to save resources
+        pros::delay(50);
+    
+    }	
 
-        // move the robot
-        chassis.arcade(leftY, rightX);
+});
 
-        // delay to save resources
-        //pros::delay(25);
-    }
+void autonomous() {
+   // chassis.moveToPose();
+    intake_bottom.move_velocity(600);   
 }
-/*void opcontrol() { FOR THE ARMMMM CODEEEEE
-	//loop forever 
-	while (true) {
-		
-	}
-
-}
-	*/
-
-/*    // Move to x: 20 and y: 15, and face heading 90. Timeout set to 4000 ms
-    chassis.moveToPose(20, 15, 90, 4000);
-    // Move to x: 0 and y: 0 and face heading 270, going backwards. Timeout set to 4000ms
-    chassis.moveToPose(0, 0, 270, 4000, {.forwards = false});
-    // cancel the movement after it has traveled 10 inches
-    chassis.waitUntil(10);
-    chassis.cancelMotion();
-    // Turn to face the point x:45, y:-45. Timeout set to 1000
-    // dont turn faster than 60 (out of a maximum of 127)
-    chassis.turnToPoint(45, -45, 1000, {.maxSpeed = 60});
-    // Turn to face a direction of 90º. Timeout set to 1000
-    // will always be faster than 100 (out of a maximum of 127)
-    // also force it to turn clockwise, the long way around
-    chassis.turnToHeading(90, 1000, {.direction = AngularDirection::CW_CLOCKWISE, .minSpeed = 100});
-    // Follow the path in path.txt. Lookahead at 15, Timeout set to 4000
-    // following the path with the back of the robot (forwards = false)
-    // see line 116 to see how to define a path
-    chassis.follow(example_txt, 15, 4000, false);
-    // wait until the chassis has traveled 10 inches. Otherwise the code directly after
-    // the movement will run immediately
-    // Unless its another movement, in which case it will wait
-    chassis.waitUntil(10);
-    pros::lcd::print(4, "Traveled 10 inches during pure pursuit!");
-    // wait until the movement is done
-    chassis.waitUntilDone();
-    pros::lcd::print(4, "pure pursuit finished!");
-}
-*/
