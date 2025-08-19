@@ -2,10 +2,11 @@ void initialize() {
     pros::lcd::initialize();
     pros::lcd::set_text(1, "Displaying Coordinates...");
     chassis.calibrate() ; // Calibrate the chassis
-   
-
+    pros::delay(2000); // Wait for calibration to finish
     // Register the center button callbacks
     pros::lcd::register_btn1_cb(on_center_button);
+
+    
     
 
 // Removed duplicate definition of initialize
@@ -15,12 +16,19 @@ void initialize() {
         while (true) {
             // Print robot location to the brain screen
             //printf(0, "X: %f", chassis.getPose().x); // x-coordinate
-            pros::lcd::print(0, "X: %f", chassis.getPose().x);
-            pros::lcd::print(1, "Y: %f", chassis.getPose().y); // y-coordinate
-            pros::lcd::print(2, "Theta: %f", chassis.getPose().theta); // heading (theta)
+            lemlib::Pose pose = chassis.getPose(); // Get current pose
+            pros::lcd::set_text(0, "Displaying X Coordinates..."); //Text to indicate x-coordinate display
+            pros::lcd::print(1, "X: %f", chassis.getPose().x); // x-coordinate
+            pros::lcd::set_text(2, "Displaying Y Coordinates..."); // Text to indicate y-coordinate display
+            pros::lcd::print(3, "Y: %f", chassis.getPose().y); // y-coordinate
+            pros::lcd::set_text(4, "Displaying Theta Coordinates..."); // Text to indicate theta display
+            pros::lcd::print(5, "Theta: %f", chassis.getPose().theta); // heading (theta)
+           
+
+
 
             // Delay to save resources
-            pros::delay(100); // Update every 100ms
+            pros::delay(50); // Update every 100ms
         }
     });
 }
