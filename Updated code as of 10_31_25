@@ -1,0 +1,372 @@
+// This is for the judges during a interview: Hello Judges, So this is our code section, so basically
+// this will take you through a step by step of our driver code, it will explain what certain function do
+// and why we decided too use those functions in our robot, plus some areas will explain what it does to
+// help our robot.
+#include "main.h"
+#include "lemlib/api.hpp"
+#include "pros/abstract_motor.hpp"
+#include "pros/adi.hpp"
+#include "pros/misc.h"
+#include "pros/motor_group.hpp"
+#include "pros/motors.hpp"
+#include "pros/rtos.hpp"
+#include <cmath>
+#include <stdlib.h>
+using namespace pros;
+using namespace adi;
+using namespace lemlib; 
+//Defining Boolean For pneumatics, pneumatics are pistons, and they are used for rapid changes in game play
+// or other immediate changes, in our case we decided to use the pistons, in a sort of angle change of the
+// ball so that we are able to score in the middle goal as well as the high goals.
+bool PneumaticPiston1 = false;
+bool PneumaticPiston2 = false;
+bool PneumaticPiston3 = false;
+bool PneumaticPiston4 = false;
+bool PneumaticPiston5 = false;
+bool PneumaticPiston6 = false;
+bool PneumaticPiston7 = false;
+
+
+
+// Creating Controller, this function defines the vex controller which we will be using in game and during
+// skills. This line of code is very important, without it the entire code won't be able to work.
+Controller controller(E_CONTROLLER_MASTER);
+
+//Drive Motors, the drive motors are the motors that will be used to move the robot around the field
+// we have 6 drive motors, 3 on each side, this will help us with our speed and acceleration
+// as well as our torque and power, this will help us with pushing other robots as well as
+// moving around the field quickly and efficiently.
+
+
+MotorGroup right_motors({1, -10, 9}, MotorGearset::blue);
+MotorGroup left_motors({20, -11, -19}, MotorGearset::blue); 
+
+
+//Intake Motors, the intake motors are the motors that will be used to intake the balls from the field
+MotorGroup intakestage3({-7}, MotorGearset::blue); // Stage 1 intake motors
+MotorGroup intakestage1({6}, MotorGearset::blue); // Stage 3 intake motors
+//Pneumatics System Definitiongcv
+//This is defining the pistons that we will be using for our pneumatics system,
+DigitalOut littlewill('H');
+DigitalOut snacky('F');
+DigitalOut snackyraise('G');
+DigitalOut descore('D', true);
+DigitalOut undergoal('B', true);
+
+
+
+//Chassis and Odomotry Definitions
+//Chassis Code
+//The chassis code is the code that will be used to control the robot's movement
+// and odometry, this code is very important as it will help us with our autonomous routines
+Drivetrain drivetrain(
+    &left_motors,
+    &right_motors, // right motor group
+    12.25, // track width (inches)
+    Omniwheel::NEW_4, // using new 4 inch omniwheels
+    343, // drivetrain rpm is 343
+    5 // horizontal drift is 2 (for now)
+);
+//ODOMETRY CODE
+Imu imu(17);
+
+
+OdomSensors sensors(nullptr, // vertical tracking wheel 1, set to nullptr
+                            nullptr, // vertical tracking wheel 2, set to nullptr as we are using IMEs
+                            nullptr, // horizontal tracking wheel 1
+                            nullptr, // horizontal tracking wheel 2, set to nullptr as we don't have a second one
+                            &imu // inertial sensor
+);
+ControllerSettings lateral_controller(13, // proportional gain (kP)
+                                            0, // integral gain (kI)
+                                            3.5, // derivative gain (kD)
+                                            3, // anti windup
+                                            1, // small error range, in inches
+                                            100, // small error range timeout, in milliseconds
+                                            3, // large error range, in inches
+                                            500, // large error range timeout, in milliseconds
+                                            13 // maximum acceleration (slew)
+);
+
+
+// Angular motion controller
+ControllerSettings angular_controller(2, // proportional gain (kP)
+                                             0.1, // integral gain (kI)
+                                             10, // derivative gain (kD)
+                                             3, // anti windup
+                                             1, // small error range, in degrees
+                                             100, // small error range timeout, in milliseconds
+                                             3, // large error range, in degrees
+                                             500, // large error range timeout, in milliseconds
+                                             0 // maximum acceleration (slew)
+);
+// lateral PID controller
+
+
+// final chassis
+Chassis chassis(drivetrain, // drivetrain settings
+                        lateral_controller, // lateral PID settings
+                        angular_controller, // angular PID settings
+                        sensors // odometry sensors
+);
+/**
+ * Runs initialization code. This occurs as soon as the program is started.
+ *
+ * All other competition modes are blocked by initialize; it is recommended
+ * to keep execution time for this mode under a few seconds.
+ */
+void initialize() {
+    lcd::initialize(); // initialize brain screen
+    chassis.calibrate(); // calibrate sensors
+
+    // the default rate is 50. however, if you need to change the rate, you
+    // can do the following.
+    // lemlib::bufferedStdout().setRate(...);
+    // If you use bluetooth or a wired connection, you will want to have a rate of 10ms
+
+    // thread to for brain screen and position logging
+    Task screenTask([&]() {
+        while (true) {
+            // print robot location to the brain screen
+            lcd::print(0, "X: %f", chassis.getPose().x); // x
+            lcd::print(1, "Y: %f", chassis.getPose().y); // y
+            lcd::print(2, "Theta: %f", chassis.getPose().theta); // heading
+            // log position telemetry
+            lemlib::telemetrySink()->info("Chassis pose: {}", chassis.getPose());
+            // delay to save resources
+            delay(50);
+        }
+    });
+}
+
+
+/**
+ * Runs while the robot is in the disabled state of Field Management System or
+ * the VEX Competition Switch, following either autonomous or opcontrol. When
+ * the robot is enabled, this task will exit.
+ */
+void disabled() {}
+
+
+
+
+
+
+void solo_left_3_6() {
+
+}
+
+
+void righthook_4() {
+    chassis.setPose(48.2, 17.294, 270);
+    chassis.moveToPoint(48.441, 47.02, 3000);
+    delay(1000);
+    chassis.turnToHeading(90, 750);
+    littlewill.set_value(false);
+    intakestage1.move_velocity(600);
+    intakestage3.move_velocity(600);
+    // chassis.moveToPoint(67.768, 47.311, 800);
+    // intakestage1.move_velocity(600);
+    // intakestage3.move_velocity(200);
+    // delay(500);
+    // chassis.moveToPoint(22.447, 47.311, 800, {.forwards = false});
+    // intakestage1.move_velocity(600);
+    // intakestage3.move_velocity(-600);
+    // delay(1500);
+    // chassis.moveToPoint(26.447, 47.311, 800);   
+    // chassis.turnToHeading(200, 750);
+    // chassis.moveToPoint(22.47, 21.541, 1000, {.maxSpeed = 70});
+    // chassis.moveToPoint(5.563, 6.434, 1000, {.maxSpeed = 70});
+    // intakestage1.move_velocity(-600);
+    // intakestage3.move_velocity(600);
+    // delay(1000);
+    // chassis.moveToPoint(24.002, -21.114, 1500, {.forwards = false, .maxSpeed = 70});
+
+
+
+}
+
+void left_8() {
+    // Setting the starting position of the robot
+    chassis.setPose(55.549, -11.339, 270);
+    // Starting the intake motors to intake the balls from the field
+    intakestage1.move_velocity(600);
+    intakestage3.move_velocity(200);
+    // Moving to the first set of balls to intake them
+    chassis.moveToPoint(24.224, -20.652, 800, {.maxSpeed = 70});//collects the 3 balls
+    chassis.waitUntilDone();
+    // Activating the pneumatic piston to make sure that the balls are secured
+    littlewill.set_value(false);
+    delay(250);
+    // Moving backwards to make sure that we have enough space to turn
+    chassis.turnToHeading(150, 350);
+    // Moving to the next set of balls to intake them
+    littlewill.set_value(true);
+    chassis.moveToPoint(37.885, -47.287, 1000, {.maxSpeed = 70});
+    delay(750);
+    // Turning to face the goal
+    chassis.turnToHeading(90, 600);
+    chassis.waitUntilDone();
+    // Moving to the goal to score the balls
+    chassis.moveToPoint(19.99, -47.287, 1000, {.forwards = false, .maxSpeed = 75});
+    chassis.waitUntilDone();
+    // Activating the intake motors to score the balls
+    intakestage1.move_velocity(600);
+    intakestage3.move_velocity(-600);
+    delay(500);
+    // Moving towards the match loader to intake more balls
+    intakestage1.move_velocity(600);
+    intakestage3.move_velocity(200);
+    chassis.moveToPoint(67.499, -47.287, 1000, { .maxSpeed = 76});
+    // Jittering to make sure that the balls are properly intaked
+    chassis.arcade(-40,0);
+    chassis.waitUntilDone();
+    //moving backwards towards the goal
+    chassis.moveToPoint(19.99, -47.287, 1000, {.forwards = false, .maxSpeed = 70});//backs away from matchloader
+    intakestage1.move_velocity(600);
+    intakestage3.move_velocity(-600);
+    delay(1000);
+    //ramming into long goal to try to get control zone.
+    chassis.moveToPoint(21.33, -47.287, 1000, {.forwards = false, .maxSpeed = 70});//backs away from matchloader
+    chassis.moveToPoint(19.99, -47.287, 1000, {.forwards = false, .maxSpeed = 70});//backs away from matchloader
+}
+
+void right_8() {
+    chassis.setPose(50.514, 15.769, 270);
+    intakestage1.move_velocity(600);
+    chassis.moveToPoint(24.224, 20.652, 800, {.maxSpeed = 70});//collects the 3 balls
+    chassis.waitUntilDone();
+    littlewill.set_value(true);
+    delay(250);
+    chassis.moveToPoint(26.787, 21.958, 800, {.forwards = false, .maxSpeed = 80});
+    chassis.turnToHeading(40,500);
+    chassis.waitUntilDone();
+    chassis.moveToPoint(36, 47.362, 1500, {.maxSpeed = 75});
+    chassis.waitUntilDone();
+    chassis.turnToHeading(90, 600);
+    chassis.moveToPoint(20.679, 44.645, 1000, {.forwards = false, .maxSpeed = 76});
+    chassis.waitUntilDone();
+    descore.set_value(false);
+   intakestage1.move_velocity(-200);
+    chassis.arcade(-40,0);
+    delay(100);
+   intakestage1.move_velocity(600);
+    intakestage3.move_velocity(-600);
+    delay(1500);
+    chassis.waitUntilDone();
+    littlewill.set_value(true);
+    chassis.moveToPoint(59.415, 45.645, 750, {.maxSpeed = 55});
+    chassis.waitUntilDone();
+    chassis.arcade(50,0);
+    delay(1500);
+    intakestage1.move_velocity(600);
+    intakestage3.move_velocity(0);
+    chassis.moveToPoint(21.679, 45.645, 1000, {.forwards = false, .maxSpeed = 70});//backs away from matchloader
+    chassis.waitUntilDone();
+    delay(1000);
+    descore.set_value(false);
+    intakestage1.move_velocity(600);
+    intakestage3.move_velocity(-400);
+
+
+}
+
+void skills_1(){;
+
+
+ }
+
+void autonomous(){
+    //left_3_5();
+    //right_3_5();
+    righthook_4();
+    //solo_left_3_6();
+    //left_8();
+    //right_8();
+
+}
+
+
+
+
+
+
+
+ 
+void intake() {
+    while (true) {
+        bool moving = false; // This is a boolean that will be used to check if the intake is moving
+         if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)) {
+            moving = true; // If the button is pressed then it will move
+            intakestage1.move_velocity(-600);
+            intakestage3.move_velocity(600);
+            //.move_velocity(600);
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)) {
+            moving = true; // If the button is pressed then it will move
+            intakestage1.move_velocity(600);
+            intakestage3.move_velocity(0);
+            //.move_velocity(600);
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            moving = true; // If the button is pressed then it will move
+            descore.set_value(false);
+            intakestage1.move_velocity(600);
+            intakestage3.move_velocity(-600);
+                                    descore.set_value(false);
+            //.move_velocity(-600);
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) {
+            moving = true; // If the button is pressed then it will move
+            intakestage1.move_velocity(600);
+            intakestage3.move_velocity(-250);  
+                        descore.set_value(false);
+        } else {
+            intakestage1.move_velocity(0); // If these buttons aren't being pressed then it like stops
+            intakestage3.move_velocity(0);
+            descore.set_value(true);
+            //.move_velocity(0);
+        }
+        
+        pros::delay(20);
+    }          
+}
+
+
+// Pneumatics Function
+void pneumatics() {
+    while (true) {
+        if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
+            PneumaticPiston1 = !PneumaticPiston1;
+            littlewill.set_value(PneumaticPiston1);//Sets Piston correct value
+            delay(50);
+        }
+        else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_X)){
+            PneumaticPiston2 = !PneumaticPiston2;
+            snacky.set_value(PneumaticPiston2);
+            delay(100);
+        }
+        else if(controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y)){
+            PneumaticPiston6 = !PneumaticPiston6;
+            snackyraise.set_value(PneumaticPiston6);
+            delay(100);
+        }
+        else if(controller.get_digital_new_press(E_CONTROLLER_DIGITAL_B)){
+            PneumaticPiston4 = !PneumaticPiston4;
+            PneumaticPiston5 = !PneumaticPiston5;
+            undergoal.set_value(PneumaticPiston5);
+            delay(50);
+        }
+        delay(15);
+    }
+}
+
+
+void opcontrol() {
+    
+    Task Intake_Task(intake); // Calls Intake Function
+    Task Pneumatics_Task(pneumatics); // Calls Pneumatics Function
+    while (true) {
+        const int linear = controller.get_analog(E_CONTROLLER_ANALOG_RIGHT_X);
+        const int lateral = controller.get_analog(E_CONTROLLER_ANALOG_LEFT_Y);
+        chassis.arcade(lateral, linear);
+        delay(20);
+    }
+}
